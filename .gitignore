@@ -1,9 +1,12 @@
 ﻿# Ignore everything by default
 *
 
-# Allow only the HTML file and the ignore rules themselves
-!billing_note_generator.html
+# Allow only the app files and the ignore rules themselves
 !.gitignore
+!wrangler.toml
+!worker.js
+!public/
+!public/**
 
 # Ignore common editor and OS noise
 .DS_Store

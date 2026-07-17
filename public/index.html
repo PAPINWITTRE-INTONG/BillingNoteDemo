@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ใบวางบิล — Billing Note Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<link rel="stylesheet" href="styles.css">
+<body>
+
+<div class="app">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-head">
+      <div class="brand-row">
+        <div>
+          <div class="brand">Billing Note Generator</div>
+          <div class="brand-sub" id="sidebarSub">ยังไม่มีข้อมูล</div>
+        </div>
+        <div class="brand-row-btns">
+          <button class="icon-btn-dark" id="docSettingsBtn" title="ตั้งค่าข้อความในเอกสาร">⚙</button>
+          <button class="icon-btn-dark" id="uploadNewBtn" title="อัปโหลดไฟล์ใหม่">⭯</button>
+        </div>
+      </div>
+      <div class="search-box">
+        <span class="search-icon">⌕</span>
+        <input type="text" id="customerSearch" placeholder="ค้นหาชื่อบริษัท..." autocomplete="off">
+      </div>
+    </div>
+    <div class="customer-list" id="customerList">
+      <div style="padding:30px 14px;color:rgba(255,255,255,.4);font-size:12.5px;text-align:center;">
+        ลากไฟล์ Excel ต้นทางเพื่อเริ่มต้น
+      </div>
+    </div>
+    <div class="sidebar-foot" id="sidebarFoot"></div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar" id="topbar" style="display:none;">
+      <div>
+        <h1 id="topTitle">—</h1>
+        <div class="sub" id="topSub"></div>
+      </div>
+      <div class="nav-controls">
+        <div class="nav-group" title="สลับลูกค้า">
+          <button class="icon-btn" id="prevCustomerBtn" title="ลูกค้าก่อนหน้า">«</button>
+          <span class="nav-group-label">ลูกค้า</span>
+          <button class="icon-btn" id="nextCustomerBtn" title="ลูกค้าถัดไป">»</button>
+        </div>
+        <div class="nav-group" title="สลับหน้าเอกสาร">
+          <button class="icon-btn" id="prevBtn" title="หน้าก่อนหน้า">‹</button>
+          <span class="nav-group-label" id="pageIndicator">หน้า —</span>
+          <button class="icon-btn" id="nextBtn" title="หน้าถัดไป">›</button>
+        </div>
+        <select id="paperSizeSelect" class="paper-select" title="ขนาดกระดาษสำหรับ PDF">
+          <optgroup label="ISO A">
+            <option value="a2">A2</option>
+            <option value="a3">A3</option>
+            <option value="a4" selected>A4</option>
+            <option value="a5">A5</option>
+            <option value="a6">A6</option>
+          </optgroup>
+          <optgroup label="ISO B">
+            <option value="b4">B4</option>
+            <option value="b5">B5</option>
+          </optgroup>
+          <optgroup label="อเมริกาเหนือ">
+            <option value="letter">Letter</option>
+            <option value="legal">Legal</option>
+            <option value="tabloid">Tabloid</option>
+            <option value="executive">Executive</option>
+          </optgroup>
+          <optgroup label="อื่นๆ">
+            <option value="folio">Folio</option>
+            <option value="custom">กำหนดเอง…</option>
+          </optgroup>
+        </select>
+        <div class="custom-size-box" id="customSizeBox" style="display:none;">
+          <input type="number" id="customWidthInput" class="custom-size-input" placeholder="กว้าง" min="20" max="2000" value="210">
+          <span>×</span>
+          <input type="number" id="customHeightInput" class="custom-size-input" placeholder="สูง" min="20" max="2000" value="297">
+          <span>มม.</span>
+        </div>
+        <select id="footerModeSelect" class="paper-select" title="รูปแบบยอดรวม/ลายเซ็นเมื่อมีหลายหน้า">
+          <option value="last">รวมยอด+เซ็น เฉพาะหน้าสุดท้าย</option>
+          <option value="every">รวมยอด+เซ็น ทุกหน้า</option>
+        </select>
+
+        <div class="split-btn" id="exportOneWrap">
+          <button class="btn btn-primary split-btn-main" id="exportOneBtn">
+            <span class="split-btn-label">Export ใบนี้</span>
+            <span class="split-btn-sub" id="exportOneFormatLabel">PDF + Excel</span>
+          </button>
+          <button class="btn btn-primary split-btn-caret" id="exportOneCaret">▾</button>
+          <div class="dropdown-menu" id="exportOneMenu">
+            <label class="dropdown-checkbox-item"><input type="checkbox" data-format="pdf"> PDF</label>
+            <label class="dropdown-checkbox-item"><input type="checkbox" data-format="xlsx"> Excel</label>
+            <label class="dropdown-checkbox-item"><input type="checkbox" data-format="odoo"> Excel สำหรับ Odoo Import</label>
+          </div>
+        </div>
+        <div class="split-btn" id="exportAllWrap">
+          <button class="btn btn-gold split-btn-main" id="exportAllBtn">
+            <span class="split-btn-label">Export ทั้งหมด (.zip)</span>
+            <span class="split-btn-sub" id="exportAllFormatLabel">PDF + Excel</span>
+          </button>
+          <button class="btn btn-gold split-btn-caret" id="exportAllCaret">▾</button>
+          <div class="dropdown-menu" id="exportAllMenu">
+            <label class="dropdown-checkbox-item"><input type="checkbox" data-format="pdf"> PDF</label>
+            <label class="dropdown-checkbox-item"><input type="checkbox" data-format="xlsx"> Excel</label>
+            <label class="dropdown-checkbox-item"><input type="checkbox" data-format="odoo"> Excel สำหรับ Odoo Import</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="doc-scroll" id="docScroll">
+      <div class="empty-state" id="emptyState">
+        <div class="dropzone" id="dropzone">
+          <div class="icon">📄</div>
+          <div class="big">ลากไฟล์ Excel ต้นทางมาวางที่นี่</div>
+          <div class="small">หรือคลิกเพื่อเลือกไฟล์ (.xlsx) — ระบบจะจัดกลุ่มตามลูกค้าให้อัตโนมัติ</div>
+          <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none;">
+        </div>
+      </div>
+
+      <div class="sheet-wrap" id="sheetWrap" style="display:none;">
+        <div class="sheet" id="sheet"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="progress-overlay" id="progressOverlay">
+  <div class="progress-card">
+    <div class="label" id="progressLabel">กำลังสร้างไฟล์…</div>
+    <div class="progress-bar-track"><div class="progress-bar-fill" id="progressFill"></div></div>
+    <div class="progress-meta">
+      <span id="progressPct">0%</span>
+      <span id="progressEta"></span>
+    </div>
+    <button class="btn btn-ghost" id="cancelExportBtn" style="margin-top:14px;width:100%;">ยกเลิก</button>
+  </div>
+</div>
+
+<!-- Hidden fixed-size render target used for PDF capture (kept off-screen, same width as .sheet) -->
+<div id="captureHost" style="position:fixed;left:-9999px;top:0;width:756px;"></div>
+
+<div class="modal-overlay" id="docSettingsOverlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2>ตั้งค่าข้อความในเอกสาร</h2>
+      <p>แก้ตรงนี้ครั้งเดียว มีผลกับทุกลูกค้า/ทุกใบที่สร้างจากนี้ไป</p>
+    </div>
+    <div class="modal-body">
+      <div class="modal-section-title">ข้อมูลบริษัท (มุมบนขวา)</div>
+      <label>ชื่อบริษัท<input type="text" id="set-companyName"></label>
+      <label>ที่อยู่ บรรทัด 1<input type="text" id="set-addressLine1"></label>
+      <label>ที่อยู่ บรรทัด 2<input type="text" id="set-addressLine2"></label>
+      <label>เลขประจำตัวผู้เสียภาษี<input type="text" id="set-taxId"></label>
+      <label>โทร/อีเมล<input type="text" id="set-contact"></label>
+
+      <div class="modal-section-title">หัวเอกสาร</div>
+      <label>ชื่อเอกสาร (ไทย)<input type="text" id="set-titleTh"></label>
+      <label>ชื่อเอกสาร (อังกฤษ)<input type="text" id="set-titleEn"></label>
+
+      <div class="modal-section-title">ข้อมูลการชำระเงิน</div>
+      <label>ชื่อบัญชี<input type="text" id="set-bankAccountName"></label>
+      <label>ธนาคาร<input type="text" id="set-bankName"></label>
+      <label>ประเภทบัญชี<input type="text" id="set-bankAccountType"></label>
+      <label>เลขที่บัญชี<input type="text" id="set-bankAccountNumber"></label>
+
+      <div class="modal-section-title">ลายเซ็น</div>
+      <label>ผู้รับวางบิล (ฝั่งซ้าย)<input type="text" id="set-signLeftLabel"></label>
+      <label>ผู้มีอำนาจลงนาม (ฝั่งขวา)<input type="text" id="set-signRightLabel"></label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="docSettingsCancelBtn">ยกเลิก</button>
+      <button class="btn btn-primary" id="docSettingsSaveBtn">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
