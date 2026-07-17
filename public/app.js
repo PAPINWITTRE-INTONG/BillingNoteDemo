@@ -847,20 +847,20 @@ function flattenChunksWithName(customerList){
 }
 
 function buildOdooRows(customerList){
-  const rows = [['Name','Customer','Bill Date','Bill Date Due','Billing Line/Invoices','Status']];
+  const rows = [['Name','Customer','Bill Date','Bill Date Due','Billing Line/Invoices','Status','Total Signed']];
   const chunks = flattenChunksWithName(customerList);
   chunks.forEach(ch => {
     const dateObj = parseDdMmYyyy(ch.docDate);
     const dueObj = parseDdMmYyyy(ch.dueDate);
     if(ch.items.length === 0){
-      rows.push([ch.blNumber||'', ch.name, dateObj, dueObj, '', '']);
+      rows.push([ch.blNumber||'', ch.name, dateObj, dueObj, '', '', '']);
       return;
     }
     ch.items.forEach((it, idx) => {
       if(idx === 0){
-        rows.push([ch.blNumber||'', ch.name, dateObj, dueObj, it.docNumber, it.status||'']);
+        rows.push([ch.blNumber||'', ch.name, dateObj, dueObj, it.docNumber, it.status||'', it.amount||0]);
       } else {
-        rows.push([null, null, null, null, it.docNumber, it.status||'']);
+        rows.push([null, null, null, null, it.docNumber, it.status||'', it.amount||0]);
       }
     });
   });
@@ -870,7 +870,7 @@ function buildOdooRows(customerList){
 function odooWorkbookArray(customerList){
   const rows = buildOdooRows(customerList);
   const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{wch:18},{wch:34},{wch:14},{wch:14},{wch:22},{wch:16}];
+  ws['!cols'] = [{wch:18},{wch:34},{wch:14},{wch:14},{wch:22},{wch:16},{wch:14}];
   for(let r=1; r<rows.length; r++){
     ['C','D'].forEach(col => {
       const ref = col + (r+1);
