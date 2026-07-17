@@ -860,7 +860,7 @@ function buildOdooRows(customerList){
       if(idx === 0){
         rows.push([ch.blNumber||'', ch.name, dateObj, dueObj, it.docNumber, it.status||'', it.amount||0]);
       } else {
-        rows.push([null, null, null, null, it.docNumber, it.status||'', it.amount||0]);
+        rows.push([null, null, null, null, it.docNumber, '', it.amount||0]);
       }
     });
   });
