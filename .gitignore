@@ -1,4 +1,11 @@
-﻿# OS / editor noise
+﻿# Ignore everything by default
+*
+
+# Allow only the HTML file and the ignore rules themselves
+!billing_note_generator.html
+!.gitignore
+
+# Ignore common editor and OS noise
 .DS_Store
 Thumbs.db
 ~$*
