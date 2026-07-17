@@ -425,7 +425,7 @@ async function renderSheet(){
 function renderCurrentPage(){
   const c = customers[currentIndex];
   const pg = currentPages[currentPageIndex];
-  document.getElementById('sheet').innerHTML = buildPageTable(c, pg.chunk, pg.items, pg.includeFooter, currentPageIndex+1, currentPages.length, true, pg.fillerCount);
+  document.getElementById('sheet').innerHTML = buildPageTable(c, pg.chunk, pg.items, pg.includeFooter, pg.pageNum, pg.pageCount, true, pg.fillerCount);
   bindEditableInputs();
   document.getElementById('pageIndicator').textContent = `หน้า ${currentPageIndex+1}/${currentPages.length}`;
   document.getElementById('prevBtn').disabled = currentPageIndex === 0;
@@ -703,37 +703,42 @@ async function measureMetrics(c, paperKey){
 
 
 /** Each chunk (BL / month) always ends with its own footer (subtotal + signature).
- *  A chunk only spans multiple pages when its own items don't fit on one page. */
+ *  A chunk only spans multiple pages when its own items don't fit on one page.
+ *  Page numbers restart at 1 within each chunk — they must never count across
+ *  chunk boundaries, since each BL/month is its own printed document. */
 function paginateItems(chunks, metrics, pageH){
   const { headerHeight, itemRowHeight, footerHeight } = metrics;
   const maxWithFooter = Math.max(1, Math.floor((pageH - headerHeight - footerHeight) / itemRowHeight));
   const maxNoFooter = Math.max(1, Math.floor((pageH - headerHeight) / itemRowHeight));
 
   if(!chunks || chunks.length === 0){
-    return [{ items: [], includeFooter: true, fillerCount: maxWithFooter, chunk: null }];
+    return [{ items: [], includeFooter: true, fillerCount: maxWithFooter, chunk: null, pageNum:1, pageCount:1 }];
   }
 
   const pages = [];
   chunks.forEach(chunk => {
+    const chunkPages = [];
     const chunkItems = chunk.items;
     if(chunkItems.length === 0){
-      pages.push({ items: [], includeFooter: true, fillerCount: maxWithFooter, chunk });
-      return;
-    }
-    let idx = 0;
-    while(idx < chunkItems.length){
-      const remaining = chunkItems.length - idx;
-      if(remaining <= maxWithFooter){
-        const pageItems = chunkItems.slice(idx, idx+remaining);
-        pages.push({ items: pageItems, includeFooter: true, fillerCount: Math.max(0, maxWithFooter - pageItems.length), chunk });
-        idx += remaining;
-      } else {
-        const take = Math.min(maxNoFooter, remaining);
-        const pageItems = chunkItems.slice(idx, idx+take);
-        pages.push({ items: pageItems, includeFooter: false, fillerCount: Math.max(0, maxNoFooter - pageItems.length), chunk });
-        idx += take;
+      chunkPages.push({ items: [], includeFooter: true, fillerCount: maxWithFooter, chunk });
+    } else {
+      let idx = 0;
+      while(idx < chunkItems.length){
+        const remaining = chunkItems.length - idx;
+        if(remaining <= maxWithFooter){
+          const pageItems = chunkItems.slice(idx, idx+remaining);
+          chunkPages.push({ items: pageItems, includeFooter: true, fillerCount: Math.max(0, maxWithFooter - pageItems.length), chunk });
+          idx += remaining;
+        } else {
+          const take = Math.min(maxNoFooter, remaining);
+          const pageItems = chunkItems.slice(idx, idx+take);
+          chunkPages.push({ items: pageItems, includeFooter: false, fillerCount: Math.max(0, maxNoFooter - pageItems.length), chunk });
+          idx += take;
+        }
       }
     }
+    chunkPages.forEach((pg, i) => { pg.pageNum = i+1; pg.pageCount = chunkPages.length; });
+    pages.push(...chunkPages);
   });
   return pages;
 }
@@ -764,7 +769,7 @@ async function customerToPdfBlob(c, onPage){
   for(let p=0; p<pages.length; p++){
     throwIfCancelled();
     const pg = pages[p];
-    const canvas = await capturePageToCanvas(c, pg.chunk, pg.items, pg.includeFooter, p+1, pages.length, paperKey, pg.fillerCount);
+    const canvas = await capturePageToCanvas(c, pg.chunk, pg.items, pg.includeFooter, pg.pageNum, pg.pageCount, paperKey, pg.fillerCount);
     throwIfCancelled();
     const imgData = canvas.toDataURL('image/png');
     const imgW = pageWmm;
