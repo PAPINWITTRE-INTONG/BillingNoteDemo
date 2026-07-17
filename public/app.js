@@ -401,7 +401,7 @@ async function renderSheet(){
   const metrics = await measureMetrics(c, paperKey);
   if(myToken !== renderToken) return; // a newer render started meanwhile — abandon this one
 
-  currentPages = paginateItems(c.chunks, metrics, pageH, currentFooterMode());
+  currentPages = paginateItems(c.chunks, metrics, pageH);
   currentPageIndex = Math.min(currentPageIndex, currentPages.length - 1);
   if(currentPageIndex < 0) currentPageIndex = 0;
 
@@ -503,7 +503,8 @@ function fillerRowHtml(isFirstOfPage){
     </tr>`;
 }
 
-function footerRowsHtml(c){
+function footerRowsHtml(chunk){
+  const total = chunk.items.reduce((s,it)=>s+it.amount,0);
   return `
       <tr>
         <td class="b-l b-r b-b">&nbsp;</td>
@@ -513,9 +514,9 @@ function footerRowsHtml(c){
         <td class="b-l b-r b-b">&nbsp;</td>
       </tr>
       <tr>
-        <td colspan="3" class="total-words-cell b-t">${thaiBahtText(c.total)}</td>
+        <td colspan="3" class="total-words-cell b-t">${thaiBahtText(total)}</td>
         <td class="total-label-cell b-t b-b b-l">จำนวนเงินทั้งสิ้น</td>
-        <td class="total-amt-cell b-t b-l b-r b-b">${fmtAmount(c.total)}</td>
+        <td class="total-amt-cell b-t b-l b-r b-b">${fmtAmount(total)}</td>
       </tr>
       <tr><td colspan="5" class="payment-cell">${paymentTextHtml()}</td></tr>
       <tr>
@@ -550,7 +551,7 @@ function buildPageTable(c, chunk, pageItems, includeFooter, pageNum, totalPages,
       ${headerRowsHtml(c, chunk, !!editable)}
       ${itemRows}
       ${fillers.join('')}
-      ${includeFooter ? footerRowsHtml(c) : ''}
+      ${includeFooter ? footerRowsHtml(chunk) : ''}
       ${pageFootnoteHtml(pageNum, totalPages)}
     </tbody>
   </table>`;
@@ -605,11 +606,6 @@ document.getElementById('paperSizeSelect').addEventListener('change', (e)=>{
     if(currentIndex >= 0) renderSheet();
   });
 });
-document.getElementById('footerModeSelect').addEventListener('change', ()=>{
-  currentPageIndex = 0;
-  if(currentIndex >= 0) renderSheet();
-});
-
 /* ---- Document settings modal ---- */
 const DOC_SETTINGS_FIELDS = ['companyName','addressLine1','addressLine2','taxId','contact','titleTh','titleEn','bankAccountName','bankName','bankAccountType','bankAccountNumber','signLeftLabel','signRightLabel'];
 function openDocSettingsModal(){
@@ -662,7 +658,6 @@ const PAGE_SIZES_MM = {
   folio: {w:210, h:330},
 };
 function currentPaperKey(){ return document.getElementById('paperSizeSelect')?.value || 'a4'; }
-function currentFooterMode(){ return document.getElementById('footerModeSelect')?.value || 'last'; }
 function getPaperDims(paperKey){
   if(paperKey === 'custom'){
     const w = parseFloat(document.getElementById('customWidthInput')?.value) || 210;
@@ -698,35 +693,28 @@ async function measureMetrics(c, paperKey){
 }
 
 
-function paginateItems(chunks, metrics, pageH, footerMode){
+/** Each chunk (BL / month) always ends with its own footer (subtotal + signature).
+ *  A chunk only spans multiple pages when its own items don't fit on one page. */
+function paginateItems(chunks, metrics, pageH){
   const { headerHeight, itemRowHeight, footerHeight } = metrics;
   const maxWithFooter = Math.max(1, Math.floor((pageH - headerHeight - footerHeight) / itemRowHeight));
   const maxNoFooter = Math.max(1, Math.floor((pageH - headerHeight) / itemRowHeight));
-  const everyPage = footerMode === 'every';
 
   if(!chunks || chunks.length === 0){
     return [{ items: [], includeFooter: true, fillerCount: maxWithFooter, chunk: null }];
   }
 
   const pages = [];
-  chunks.forEach((chunk, ci) => {
-    const isLastChunk = ci === chunks.length - 1;
+  chunks.forEach(chunk => {
     const chunkItems = chunk.items;
-    let idx = 0;
     if(chunkItems.length === 0){
-      const includeFooter = everyPage || isLastChunk;
-      const cap = includeFooter ? maxWithFooter : maxNoFooter;
-      pages.push({ items: [], includeFooter, fillerCount: cap, chunk });
+      pages.push({ items: [], includeFooter: true, fillerCount: maxWithFooter, chunk });
       return;
     }
+    let idx = 0;
     while(idx < chunkItems.length){
       const remaining = chunkItems.length - idx;
-      if(everyPage){
-        const take = Math.min(maxWithFooter, remaining);
-        const pageItems = chunkItems.slice(idx, idx+take);
-        pages.push({ items: pageItems, includeFooter: true, fillerCount: Math.max(0, maxWithFooter - pageItems.length), chunk });
-        idx += take;
-      } else if(isLastChunk && remaining <= maxWithFooter){
+      if(remaining <= maxWithFooter){
         const pageItems = chunkItems.slice(idx, idx+remaining);
         pages.push({ items: pageItems, includeFooter: true, fillerCount: Math.max(0, maxWithFooter - pageItems.length), chunk });
         idx += remaining;
@@ -738,9 +726,6 @@ function paginateItems(chunks, metrics, pageH, footerMode){
       }
     }
   });
-  if(!everyPage && !pages[pages.length-1].includeFooter){
-    pages.push({ items: [], includeFooter: true, fillerCount: maxWithFooter, chunk: chunks[chunks.length-1] });
-  }
   return pages;
 }
 
@@ -761,7 +746,7 @@ async function customerToPdfBlob(c, onPage){
   const dims = getPaperDims(paperKey);
   const pageH = pageHeightPx(paperKey);
   const metrics = await measureMetrics(c, paperKey);
-  const pages = paginateItems(c.chunks, metrics, pageH, currentFooterMode());
+  const pages = paginateItems(c.chunks, metrics, pageH);
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF({unit:'mm', format:[dims.w, dims.h]});
   const pageWmm = pdf.internal.pageSize.getWidth();
