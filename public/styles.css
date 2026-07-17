@@ -105,6 +105,9 @@
   .dropdown-checkbox-item{display:flex;align-items:center;gap:9px;padding:10px 14px;font-size:13px;color:var(--ink);cursor:pointer;}
   .dropdown-checkbox-item:hover{background:#f5f3ee;}
   .dropdown-checkbox-item input[type="checkbox"]{width:15px;height:15px;accent-color:var(--gold);cursor:pointer;}
+  .dropdown-divider{height:1px;background:var(--line);margin:4px 0;}
+  .dropdown-action-item{padding:10px 14px;font-size:13px;color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:8px;}
+  .dropdown-action-item:hover{background:#f5f3ee;}
   .nav-group-label{font-size:12px;color:var(--muted);white-space:nowrap;min-width:52px;text-align:center;}
   .nav-group .icon-btn{width:28px;height:28px;font-size:14px;}
 

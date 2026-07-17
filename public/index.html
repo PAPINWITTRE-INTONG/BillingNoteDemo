@@ -89,7 +89,6 @@
           <span>มม.</span>
         </div>
 
-        <button class="btn btn-ghost" id="printBtn" title="พิมพ์เอกสารใบนี้">🖨 พิมพ์</button>
         <div class="split-btn" id="exportOneWrap">
           <button class="btn btn-primary split-btn-main" id="exportOneBtn">
             <span class="split-btn-label">Export ใบนี้</span>
@@ -100,9 +99,10 @@
             <label class="dropdown-checkbox-item"><input type="checkbox" data-format="pdf"> PDF</label>
             <label class="dropdown-checkbox-item"><input type="checkbox" data-format="xlsx"> Excel</label>
             <label class="dropdown-checkbox-item"><input type="checkbox" data-format="odoo"> Excel สำหรับ Odoo Import</label>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-action-item" id="printOneAction">🖨 พิมพ์ใบนี้</div>
           </div>
         </div>
-        <button class="btn btn-ghost" id="printAllBtn" title="พิมพ์เอกสารทั้งหมด">🖨 พิมพ์ทั้งหมด</button>
         <div class="split-btn" id="exportAllWrap">
           <button class="btn btn-gold split-btn-main" id="exportAllBtn">
             <span class="split-btn-label">Export ทั้งหมด (.zip)</span>
@@ -113,6 +113,8 @@
             <label class="dropdown-checkbox-item"><input type="checkbox" data-format="pdf"> PDF</label>
             <label class="dropdown-checkbox-item"><input type="checkbox" data-format="xlsx"> Excel</label>
             <label class="dropdown-checkbox-item"><input type="checkbox" data-format="odoo"> Excel สำหรับ Odoo Import</label>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-action-item" id="printAllAction">🖨 พิมพ์ทั้งหมด</div>
           </div>
         </div>
       </div>

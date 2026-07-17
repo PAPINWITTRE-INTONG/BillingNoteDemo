@@ -1193,7 +1193,8 @@ document.getElementById('exportOneBtn').addEventListener('click', async () => {
   }
 });
 
-document.getElementById('printBtn').addEventListener('click', async () => {
+document.getElementById('printOneAction').addEventListener('click', async () => {
+  document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
   if(currentIndex < 0) return;
   const c = customers[currentIndex];
   exportCancelRequested = false;
@@ -1226,7 +1227,8 @@ document.getElementById('printBtn').addEventListener('click', async () => {
   }
 });
 
-document.getElementById('printAllBtn').addEventListener('click', async () => {
+document.getElementById('printAllAction').addEventListener('click', async () => {
+  document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
   if(customers.length === 0) return;
   if(!confirm(`เตรียมพิมพ์เอกสารทั้งหมด ${customers.length} ลูกค้า เป็นไฟล์เดียว ต้องการดำเนินการต่อหรือไม่?`)) return;
   exportCancelRequested = false;
