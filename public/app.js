@@ -730,14 +730,14 @@ function paginateItems(chunks, metrics, pageH){
           chunkPages.push({ items: pageItems, includeFooter: true, fillerCount: Math.max(0, maxWithFooter - pageItems.length), chunk });
           idx += remaining;
         } else {
-          const take = Math.min(maxNoFooter, remaining);
+          let take = Math.min(maxNoFooter, remaining);
+          // Reserve at least one item for the trailing footer page instead of
+          // leaving it an empty page with only the subtotal/signature block.
+          if(take === remaining) take -= 1;
           const pageItems = chunkItems.slice(idx, idx+take);
           chunkPages.push({ items: pageItems, includeFooter: false, fillerCount: Math.max(0, maxNoFooter - pageItems.length), chunk });
           idx += take;
         }
-      }
-      if(!chunkPages[chunkPages.length-1].includeFooter){
-        chunkPages.push({ items: [], includeFooter: true, fillerCount: maxWithFooter, chunk });
       }
     }
     chunkPages.forEach((pg, i) => { pg.pageNum = i+1; pg.pageCount = chunkPages.length; });
