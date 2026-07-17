@@ -736,6 +736,9 @@ function paginateItems(chunks, metrics, pageH){
           idx += take;
         }
       }
+      if(!chunkPages[chunkPages.length-1].includeFooter){
+        chunkPages.push({ items: [], includeFooter: true, fillerCount: maxWithFooter, chunk });
+      }
     }
     chunkPages.forEach((pg, i) => { pg.pageNum = i+1; pg.pageCount = chunkPages.length; });
     pages.push(...chunkPages);
