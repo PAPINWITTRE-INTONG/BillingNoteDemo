@@ -694,7 +694,7 @@ async function measureMetrics(c, paperKey){
   const sampleItem = sampleChunk.items[0] || {seq:1, docNumber:'SAMPLE', date:new Date(), dueDate:new Date(), amount:0};
   host.innerHTML = `<div class="sheet">${buildPageTable(c, sampleChunk, [sampleItem], true, 1, 1)}</div>`;
   if(document.fonts && document.fonts.ready) await document.fonts.ready;
-  await new Promise(r => requestAnimationFrame(()=>requestAnimationFrame(r)));
+  await new Promise(r => setTimeout(r, 30)); // setTimeout (not rAF) keeps running while the tab is backgrounded
   const table = host.querySelector('table.formtable');
   const itemRow = table.querySelector('tr.items-row');
   const headerHeight = itemRow.offsetTop;
@@ -755,7 +755,7 @@ async function capturePageToCanvas(c, chunk, pageItems, includeFooter, pageNum, 
   host.style.width = paperWidthPx(paperKey || currentPaperKey()) + 'px';
   host.innerHTML = `<div class="sheet">${buildPageTable(c, chunk, pageItems, includeFooter, pageNum, totalPages, false, fillerCount)}</div>`;
   if(document.fonts && document.fonts.ready) await document.fonts.ready;
-  await new Promise(r => requestAnimationFrame(()=>requestAnimationFrame(r)));
+  await new Promise(r => setTimeout(r, 30)); // setTimeout (not rAF) keeps running while the tab is backgrounded
   const node = host.querySelector('.sheet');
   return html2canvas(node, {scale:2, backgroundColor:'#ffffff', useCORS:true});
 }
