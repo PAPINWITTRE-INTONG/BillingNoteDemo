@@ -91,10 +91,18 @@ function thaiBahtText(amount){
 }
 
 /* ============================= HELPERS ============================= */
+const DAY_MS = 86400000;
+/** Source files sometimes encode a date as a UTC timestamp a few seconds shy of local
+ *  midnight (e.g. 16:59:56Z instead of 17:00:00Z) rather than a clean date. Rounding to
+ *  the nearest UTC day recovers the intended calendar date regardless of that drift. */
+function roundToUtcDay(dt){
+  return new Date(Math.round(dt.getTime()/DAY_MS)*DAY_MS);
+}
 function fmtDate(d){
   if(!d) return '';
   let dt = d instanceof Date ? d : new Date(d);
   if(isNaN(dt)) return String(d);
+  dt = roundToUtcDay(dt);
   const dd = String(dt.getUTCDate()).padStart(2,'0');
   const mm = String(dt.getUTCMonth()+1).padStart(2,'0');
   return `${dd}/${mm}/${dt.getUTCFullYear()}`;
@@ -198,8 +206,9 @@ function pick(row, keys){
 
 const THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 function monthKey(d){
-  const dt = d instanceof Date ? d : new Date(d);
+  let dt = d instanceof Date ? d : new Date(d);
   if(isNaN(dt)) return 'ไม่ทราบวันที่';
+  dt = roundToUtcDay(dt);
   return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}`;
 }
 function monthLabel(key){
