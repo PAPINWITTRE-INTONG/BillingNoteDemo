@@ -3,6 +3,7 @@
 
 # Allow only the app files and the ignore rules themselves
 !.gitignore
+!README.md
 !wrangler.toml
 !worker.js
 !public/
