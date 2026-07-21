@@ -91,6 +91,9 @@ function thaiBahtText(amount){
 }
 
 /* ============================= HELPERS ============================= */
+// Fonts change measured row heights and the rasterized output. Await readiness
+// once and reuse the resolved promise instead of re-awaiting on every page.
+const fontsReady = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
 const DAY_MS = 86400000;
 /** Source files sometimes encode a date as a UTC timestamp a few seconds shy of local
  *  midnight (e.g. 16:59:56Z instead of 17:00:00Z) rather than a clean date. Rounding to
@@ -121,16 +124,24 @@ function showToast(msg){
   clearTimeout(showToast._tm);
   showToast._tm = setTimeout(()=>t.classList.remove('show'), 2600);
 }
+// Progress overlay elements are static in the DOM — resolve once instead of on
+// every setProgress call (fires per-page, i.e. thousands of times during an export).
+const progressEls = {
+  overlay: document.getElementById('progressOverlay'),
+  fill:    document.getElementById('progressFill'),
+  pct:     document.getElementById('progressPct'),
+  eta:     document.getElementById('progressEta'),
+  label:   document.getElementById('progressLabel'),
+};
 function setProgress(pct, label, etaText){
-  const ov = document.getElementById('progressOverlay');
-  ov.classList.add('show');
-  document.getElementById('progressFill').style.width = pct+'%';
-  document.getElementById('progressPct').textContent = Math.round(pct)+'%';
-  document.getElementById('progressEta').textContent = etaText || '';
-  if(label) document.getElementById('progressLabel').textContent = label;
-  if(pct>=100) setTimeout(()=>ov.classList.remove('show'), 400);
+  progressEls.overlay.classList.add('show');
+  progressEls.fill.style.width = pct+'%';
+  progressEls.pct.textContent = Math.round(pct)+'%';
+  progressEls.eta.textContent = etaText || '';
+  if(label) progressEls.label.textContent = label;
+  if(pct>=100) setTimeout(()=>progressEls.overlay.classList.remove('show'), 400);
 }
-function hideProgress(){ document.getElementById('progressOverlay').classList.remove('show'); }
+function hideProgress(){ progressEls.overlay.classList.remove('show'); }
 
 function formatDuration(sec){
   sec = Math.max(0, Math.round(sec));
@@ -164,7 +175,7 @@ function throwIfCancelled(){
 }
 document.getElementById('cancelExportBtn').addEventListener('click', ()=>{
   exportCancelRequested = true;
-  document.getElementById('progressLabel').textContent = 'กำลังยกเลิก…';
+  progressEls.label.textContent = 'กำลังยกเลิก…';
 });
 
 /* ============================= FILE PARSING ============================= */
@@ -204,6 +215,25 @@ function pick(row, keys){
   return null;
 }
 
+// Candidate column names per field, hoisted so pick() doesn't allocate a fresh
+// array literal on every one of the (rows × fields) lookups when parsing a file.
+const COL = {
+  billingNumber:  ['Billing Number','billing number'],
+  partnerName:    ['Partner/Name','Partner','partner'],
+  partner:        ['Partner','partner'],
+  invoiceAddress: ['Invoice Address/Address','Invoice Address','Address','address'],
+  billingDate:    ['Billing Date','billing date'],
+  billingDueDate: ['Billing Due date','Billing Due Date','billing due date'],
+  number:         ['Number','number'],
+  invoiceBillDate:['Invoice/Bill Date','Bill Date','Date','date'],
+  dueDate:        ['Due Date','due date','DueDate'],
+  totalSignedNew: ['Total Signed','Total in Currency Signed'],
+  totalSignedOld: ['Total in Currency Signed','Total Signed'],
+  status:         ['Status','status'],
+  dateOld:        ['Date','date'],
+  saleTags:       ['Sale Tags','sale tags','SaleTags'],
+};
+
 const THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 function monthKey(d){
   let dt = d instanceof Date ? d : new Date(d);
@@ -225,7 +255,7 @@ function extractSellerName(saleTag){
 function modeSeller(rawItems){
   const counts = {};
   rawItems.forEach(r => {
-    const tag = pick(r, ['Sale Tags','sale tags','SaleTags']);
+    const tag = pick(r, COL.saleTags);
     const name = extractSellerName(tag);
     if(!name) return;
     counts[name] = (counts[name]||0) + 1;
@@ -241,7 +271,7 @@ let rawSourceRows = [];
 
 function buildCustomersFromRows(rows){
   if(rows.length === 0) return [];
-  const hasBillingNumber = rows.some(r => pick(r, ['Billing Number','billing number']) !== null);
+  const hasBillingNumber = rows.some(r => pick(r, COL.billingNumber) !== null);
   return hasBillingNumber ? buildCustomersByBillingNumber(rows) : buildCustomersByPartnerOnly(rows);
 }
 
@@ -252,9 +282,9 @@ function buildCustomersByBillingNumber(rows){
   const custOrder = [];
   const custBlMap = {}; // name -> { blKey -> rawRows[] }
   rows.forEach(r => {
-    const name = String(pick(r, ['Partner/Name','Partner','partner']) || '').trim();
+    const name = String(pick(r, COL.partnerName) || '').trim();
     if(!name) return;
-    const bl = pick(r, ['Billing Number','billing number']);
+    const bl = pick(r, COL.billingNumber);
     if(!bl) return;
     const blKey = String(bl).trim();
     if(!blKey) return;
@@ -270,16 +300,16 @@ function buildCustomersByBillingNumber(rows){
     const chunks = Object.keys(blMap).map(blKey => {
       const rawItems = blMap[blKey];
       const first = rawItems[0];
-      const address = String(pick(first, ['Invoice Address/Address','Invoice Address','Address','address']) || '').trim();
-      const docDateRaw = pick(first, ['Billing Date','billing date']);
-      const dueDateRaw = pick(first, ['Billing Due date','Billing Due Date','billing due date']);
+      const address = String(pick(first, COL.invoiceAddress) || '').trim();
+      const docDateRaw = pick(first, COL.billingDate);
+      const dueDateRaw = pick(first, COL.billingDueDate);
       const items = rawItems.map((r, i) => ({
         seq: i+1,
-        docNumber: pick(r, ['Number','number']) || '',
-        date: pick(r, ['Invoice/Bill Date','Bill Date','Date','date']),
-        dueDate: pick(r, ['Due Date','due date','DueDate']),
-        amount: parseFloat(pick(r, ['Total Signed','Total in Currency Signed'])) || 0,
-        status: pick(r, ['Status','status']) || ''
+        docNumber: pick(r, COL.number) || '',
+        date: pick(r, COL.invoiceBillDate),
+        dueDate: pick(r, COL.dueDate),
+        amount: parseFloat(pick(r, COL.totalSignedNew)) || 0,
+        status: pick(r, COL.status) || ''
       }));
       return {
         blKey, blNumber: blKey,
@@ -288,8 +318,9 @@ function buildCustomersByBillingNumber(rows){
         items
       };
     }).sort((a,b) => a.blNumber.localeCompare(b.blNumber, undefined, {numeric:true, sensitivity:'base'})); // lowest BL number first
-    const total = chunks.reduce((s,ch) => s + ch.items.reduce((s2,it)=>s2+it.amount,0), 0);
-    return { name, total, chunks };
+    let total = 0, itemCount = 0;
+    chunks.forEach(ch => { itemCount += ch.items.length; for(const it of ch.items) total += it.amount; });
+    return { name, total, itemCount, chunks };
   });
 
   return customers.sort((a, b) => a.chunks[0].blNumber.localeCompare(b.chunks[0].blNumber, undefined, {numeric:true, sensitivity:'base'}));
@@ -301,7 +332,7 @@ function buildCustomersByPartnerOnly(rows){
   const groups = {};
   const order = [];
   rows.forEach(r => {
-    const partner = pick(r, ['Partner','partner']);
+    const partner = pick(r, COL.partner);
     if(!partner) return;
     const name = String(partner).trim();
     if(!name) return;
@@ -315,7 +346,7 @@ function buildCustomersByPartnerOnly(rows){
     const rawItems = groups[name];
     const monthGroups = {};
     rawItems.forEach(r => {
-      const mk = monthKey(pick(r, ['Date','date']));
+      const mk = monthKey(pick(r, COL.dateOld));
       if(!monthGroups[mk]) monthGroups[mk] = [];
       monthGroups[mk].push(r);
     });
@@ -324,17 +355,18 @@ function buildCustomersByPartnerOnly(rows){
     const chunks = Object.keys(monthGroups).map(mk => {
       const items = monthGroups[mk].map((r,i) => ({
         seq: i+1,
-        docNumber: pick(r, ['Number','number']) || '',
-        date: pick(r, ['Date','date']),
-        dueDate: pick(r, ['Due Date','due date','DueDate']),
-        amount: parseFloat(pick(r, ['Total in Currency Signed','Total Signed'])) || 0,
-        status: pick(r, ['Status','status']) || ''
+        docNumber: pick(r, COL.number) || '',
+        date: pick(r, COL.dateOld),
+        dueDate: pick(r, COL.dueDate),
+        amount: parseFloat(pick(r, COL.totalSignedOld)) || 0,
+        status: pick(r, COL.status) || ''
       }));
       return { blKey: mk, blNumber:'', docDate:'', dueDate:'', address:'', seller, items };
     }).sort((a,b) => b.blKey.localeCompare(a.blKey)); // newest month first ("yyyy-mm" sorts lexically)
 
-    const total = chunks.reduce((s,ch) => s + ch.items.reduce((s2,it)=>s2+it.amount,0), 0);
-    return { name, total, chunks };
+    let total = 0, itemCount = 0;
+    chunks.forEach(ch => { itemCount += ch.items.length; for(const it of ch.items) total += it.amount; });
+    return { name, total, itemCount, chunks };
   }).sort((a, b) => a.name.localeCompare(b.name, 'th'));
 }
 
@@ -373,26 +405,21 @@ function renderSidebar(){
 
   list.innerHTML = visibleEntries.map(({c, i}) => {
     const incomplete = c.chunks.some(ch => !ch.blNumber || !ch.docDate);
-    const itemCount = c.chunks.reduce((s,ch)=>s+ch.items.length, 0);
+    const itemCount = c.itemCount;
     const pageNote = c.chunks.length > 1 ? ` · ${c.chunks.length} BL` : '';
     return `<div class="customer-item ${i===currentIndex?'active':''} ${incomplete?'incomplete':''}" data-idx="${i}">
       <div class="name">${escapeHtml(c.name)}</div>
       <div class="meta">${itemCount} รายการ${pageNote} · ${fmtAmount(c.total)} บาท</div>
     </div>`;
   }).join('');
-  list.querySelectorAll('.customer-item').forEach(el=>{
-    el.addEventListener('click', ()=>{
-      currentIndex = parseInt(el.dataset.idx,10);
-      currentPageIndex = 0;
-      renderSidebar();
-      renderSheet();
-    });
-  });
+  // Row clicks are handled by a single delegated listener bound once at init
+  // (see below) — avoids re-attaching a listener per row on every re-render.
   document.getElementById('sidebarFoot').textContent = '● = ยังไม่กรอกเลขที่เอกสาร/วันที่เอกสาร';
 }
 
+const HTML_ESCAPE_MAP = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
 function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  return String(s).replace(/[&<>"']/g, m => HTML_ESCAPE_MAP[m]);
 }
 
 /* ============================= RENDER SHEET (EDIT VIEW, PAGINATED) ============================= */
@@ -416,7 +443,7 @@ async function renderSheet(){
   currentPageIndex = Math.min(currentPageIndex, currentPages.length - 1);
   if(currentPageIndex < 0) currentPageIndex = 0;
 
-  const itemCount = c.chunks.reduce((s,ch)=>s+ch.items.length, 0);
+  const itemCount = c.itemCount;
   document.getElementById('topSub').textContent = `ลูกค้า ${currentIndex+1} / ${customers.length} — ${itemCount} รายการ`;
   document.getElementById('prevCustomerBtn').disabled = currentIndex === 0;
   document.getElementById('nextCustomerBtn').disabled = currentIndex === customers.length-1;
@@ -659,6 +686,15 @@ document.getElementById('uploadNewBtn').addEventListener('click', ()=>{
   fileInput.value = '';
 });
 document.getElementById('customerSearch').addEventListener('input', () => renderSidebar());
+// Single delegated listener for all customer rows (bound once, survives re-renders).
+document.getElementById('customerList').addEventListener('click', (e)=>{
+  const item = e.target.closest('.customer-item');
+  if(!item) return;
+  currentIndex = parseInt(item.dataset.idx, 10);
+  currentPageIndex = 0;
+  renderSidebar();
+  renderSheet();
+});
 
 /* ============================= PAGINATION ============================= */
 const PX_PER_MM = 3.6; // preview scale — A4 (210mm) renders at ~756px wide
@@ -679,22 +715,25 @@ function getPaperDims(paperKey){
 }
 function paperWidthPx(paperKey){ return getPaperDims(paperKey).w * PX_PER_MM; }
 function pageHeightPx(paperKey){ return getPaperDims(paperKey).h * PX_PER_MM; }
+// Off-screen host used to render each page for measuring/screenshotting — resolve once.
+const captureHost = document.getElementById('captureHost');
 function applyPaperDimensions(paperKey){
   const w = paperWidthPx(paperKey);
   const h = pageHeightPx(paperKey);
   document.getElementById('sheetWrap').style.width = w + 'px';
-  document.getElementById('captureHost').style.width = w + 'px';
+  captureHost.style.width = w + 'px';
   document.getElementById('sheet').style.minHeight = h + 'px';
 }
 
 async function measureMetrics(c, paperKey){
-  const host = document.getElementById('captureHost');
+  const host = captureHost;
   host.style.width = paperWidthPx(paperKey) + 'px';
   const sampleChunk = c.chunks[0] || { blNumber:'', docDate:'', dueDate:'', address:'', seller:'', items:[] };
   const sampleItem = sampleChunk.items[0] || {seq:1, docNumber:'SAMPLE', date:new Date(), dueDate:new Date(), amount:0};
   host.innerHTML = `<div class="sheet">${buildPageTable(c, sampleChunk, [sampleItem], true, 1, 1)}</div>`;
-  if(document.fonts && document.fonts.ready) await document.fonts.ready;
-  await new Promise(r => setTimeout(r, 30)); // setTimeout (not rAF) keeps running while the tab is backgrounded
+  await fontsReady;
+  // Reading offsetTop/offsetHeight below forces a synchronous reflow, so the layout
+  // is already up to date — no extra wait needed once fonts are loaded.
   const table = host.querySelector('table.formtable');
   const itemRow = table.querySelector('tr.items-row');
   const headerHeight = itemRow.offsetTop;
@@ -751,13 +790,15 @@ function paginateItems(chunks, metrics, pageH){
 /* ============================= PDF GENERATION ============================= */
 
 async function capturePageToCanvas(c, chunk, pageItems, includeFooter, pageNum, totalPages, paperKey, fillerCount){
-  const host = document.getElementById('captureHost');
+  const host = captureHost;
   host.style.width = paperWidthPx(paperKey || currentPaperKey()) + 'px';
   host.innerHTML = `<div class="sheet">${buildPageTable(c, chunk, pageItems, includeFooter, pageNum, totalPages, false, fillerCount)}</div>`;
-  if(document.fonts && document.fonts.ready) await document.fonts.ready;
-  await new Promise(r => setTimeout(r, 30)); // setTimeout (not rAF) keeps running while the tab is backgrounded
+  await fontsReady;
+  // One macrotask yield so any pending style/layout work flushes before html2canvas
+  // reads the DOM. setTimeout(0) (not rAF) keeps firing while the tab is backgrounded.
+  await new Promise(r => setTimeout(r, 0));
   const node = host.querySelector('.sheet');
-  return html2canvas(node, {scale:2, backgroundColor:'#ffffff', useCORS:true});
+  return html2canvas(node, {scale:2, backgroundColor:'#ffffff', useCORS:true, logging:false});
 }
 
 async function customerToPdfBlob(c, onPage){
@@ -776,14 +817,16 @@ async function customerToPdfBlob(c, onPage){
     const pg = pages[p];
     const canvas = await capturePageToCanvas(c, pg.chunk, pg.items, pg.includeFooter, pg.pageNum, pg.pageCount, paperKey, pg.fillerCount);
     throwIfCancelled();
-    const imgData = canvas.toDataURL('image/png');
     const imgW = pageWmm;
     const imgH = canvas.height * imgW / canvas.width;
     let renderH = imgH, renderW = imgW;
     if(imgH > pageHmm){ renderH = pageHmm; renderW = canvas.width * renderH / canvas.height; }
     const x = (pageWmm - renderW)/2;
     if(p > 0) pdf.addPage([dims.w, dims.h]);
-    pdf.addImage(imgData, 'PNG', x, 0, renderW, renderH);
+    // Pass the canvas straight to jsPDF (avoids retaining a multi-MB base64 string),
+    // then drop its backing store so peak memory doesn't grow with page count.
+    pdf.addImage(canvas, 'PNG', x, 0, renderW, renderH);
+    canvas.width = canvas.height = 0;
     if(onPage) onPage(p+1, pages.length);
   }
   return pdf.output('blob');
@@ -816,14 +859,16 @@ async function allCustomersToPdfBlob(customerList, onProgress){
     for(const pg of pages){
       throwIfCancelled();
       const canvas = await capturePageToCanvas(c, pg.chunk, pg.items, pg.includeFooter, pg.pageNum, pg.pageCount, paperKey, pg.fillerCount);
-      const imgData = canvas.toDataURL('image/png');
       const imgW = pageWmm;
       const imgH = canvas.height * imgW / canvas.width;
       let renderH = imgH, renderW = imgW;
       if(imgH > pageHmm){ renderH = pageHmm; renderW = canvas.width * renderH / canvas.height; }
       const x = (pageWmm - renderW)/2;
       if(pageAdded) pdf.addPage([dims.w, dims.h]);
-      pdf.addImage(imgData, 'PNG', x, 0, renderW, renderH);
+      // Pass the canvas straight to jsPDF and release its backing store afterward —
+      // critical for "print all", where hundreds of scale-2 canvases would otherwise pile up.
+      pdf.addImage(canvas, 'PNG', x, 0, renderW, renderH);
+      canvas.width = canvas.height = 0;
       pageAdded = true;
       done++;
       if(onProgress) onProgress(done, totalPages, c.name);
@@ -1081,6 +1126,26 @@ function downloadBlob(blob, filename){
   URL.revokeObjectURL(url);
 }
 
+/** Opens a PDF blob in a new tab and triggers print, then revokes the object URL
+ *  once the viewer has loaded it — otherwise the blob stays pinned in memory until
+ *  the tab closes (a real leak when printing hundreds of pages). */
+function openForPrint(pdfBlob){
+  const url = URL.createObjectURL(pdfBlob);
+  const printWin = window.open(url, '_blank');
+  if(!printWin){
+    URL.revokeObjectURL(url);
+    showToast('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ — กรุณาอนุญาต popup แล้วลองใหม่');
+    return;
+  }
+  printWin.addEventListener('load', () => {
+    printWin.focus();
+    printWin.print();
+    // The viewer keeps the loaded document even after the URL is revoked; wait a
+    // few seconds to be safe, then release it.
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  });
+}
+
 let exportFormats = { pdf: true, xlsx: true, odoo: false };
 const FORMAT_NAMES = { pdf: 'PDF', xlsx: 'Excel', odoo: 'Odoo Import' };
 
@@ -1189,16 +1254,7 @@ document.getElementById('printOneAction').addEventListener('click', async () => 
     });
     throwIfCancelled();
     setProgress(100, 'พร้อมพิมพ์');
-    const url = URL.createObjectURL(pdfBlob);
-    const printWin = window.open(url, '_blank');
-    if(!printWin){
-      showToast('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ — กรุณาอนุญาต popup แล้วลองใหม่');
-      return;
-    }
-    printWin.addEventListener('load', () => {
-      printWin.focus();
-      printWin.print();
-    });
+    openForPrint(pdfBlob);
   }catch(err){
     hideProgress();
     if(err instanceof ExportCancelledError){
@@ -1223,16 +1279,7 @@ document.getElementById('printAllAction').addEventListener('click', async () => 
     });
     throwIfCancelled();
     setProgress(100, 'พร้อมพิมพ์');
-    const url = URL.createObjectURL(pdfBlob);
-    const printWin = window.open(url, '_blank');
-    if(!printWin){
-      showToast('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ — กรุณาอนุญาต popup แล้วลองใหม่');
-      return;
-    }
-    printWin.addEventListener('load', () => {
-      printWin.focus();
-      printWin.print();
-    });
+    openForPrint(pdfBlob);
   }catch(err){
     hideProgress();
     if(err instanceof ExportCancelledError){
