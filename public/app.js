@@ -931,7 +931,7 @@ function addBillingSheet(workbook, customerName, chunk, sheetName){
       margins: { left:0.35, right:0.35, top:0.4, bottom:0.4, header:0.2, footer:0.2 }
     }
   });
-  ws.columns = [{width:8},{width:23},{width:13},{width:15},{width:20}];
+  ws.columns = [{width:8},{width:23},{width:13},{width:15},{width:30}];
 
   const FONT = 'Angsana New';
   const thin = { style: 'thin', color: { argb: 'FF000000' } };
@@ -952,7 +952,7 @@ function addBillingSheet(workbook, customerName, chunk, sheetName){
   companyCell.alignment = { horizontal:'right', vertical:'top', wrapText:true };
   companyCell.font = { name:FONT, size:13 };
   setBorder(companyCell, { bottom:true });
-  ws.getRow(1).height = 92;
+  ws.getRow(1).height = 140;
   try{
     const logoId = workbook.addImage({ base64: LOGO_DATA_URI.split(',')[1], extension:'jpeg' });
     ws.addImage(logoId, { tl:{col:0,row:0}, ext:{width:170,height:26} });
