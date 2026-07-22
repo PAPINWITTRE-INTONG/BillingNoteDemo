@@ -191,6 +191,14 @@ dropzone.addEventListener('drop', e=>{
   if(f) handleFile(f);
 });
 
+/** Lowercases every column header so the parser doesn't care whether the source
+ *  file capitalized it as "Billing Number", "BILLING NUMBER", or anything else. */
+function normalizeRowKeys(row){
+  const out = {};
+  for(const k in row) out[k.trim().toLowerCase()] = row[k];
+  return out;
+}
+
 function handleFile(file){
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -198,7 +206,7 @@ function handleFile(file){
       const data = new Uint8Array(e.target.result);
       const wb = XLSX.read(data, {type:'array', cellDates:true});
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, {defval:null});
+      const rows = XLSX.utils.sheet_to_json(ws, {defval:null}).map(normalizeRowKeys);
       parseRows(rows);
     }catch(err){
       console.error(err);
@@ -217,21 +225,24 @@ function pick(row, keys){
 
 // Candidate column names per field, hoisted so pick() doesn't allocate a fresh
 // array literal on every one of the (rows × fields) lookups when parsing a file.
+// Every row's keys are lowercased by normalizeRowKeys() when the file is read, so
+// these only need one lowercase spelling per alternate column name — no more
+// case-variant duplicates (source headers of any case now match automatically).
 const COL = {
-  billingNumber:  ['Billing Number','billing number'],
-  partnerName:    ['Partner/Name','Partner','partner'],
-  partner:        ['Partner','partner'],
-  invoiceAddress: ['Invoice Address/Address','Invoice Address','Address','address'],
-  billingDate:    ['Billing Date','billing date'],
-  billingDueDate: ['Billing Due date','Billing Due Date','billing due date'],
-  number:         ['Number','number'],
-  invoiceBillDate:['Invoice/Bill Date','Bill Date','Date','date'],
-  dueDate:        ['Due Date','due date','DueDate'],
-  totalSignedNew: ['Total Signed','Total in Currency Signed'],
-  totalSignedOld: ['Total in Currency Signed','Total Signed'],
-  status:         ['Status','status'],
-  dateOld:        ['Date','date'],
-  saleTags:       ['Sale Tags','sale tags','SaleTags'],
+  billingNumber:  ['billing number'],
+  partnerName:    ['partner/name','partner'],
+  partner:        ['partner'],
+  invoiceAddress: ['invoice address/address','invoice address','address'],
+  billingDate:    ['billing date'],
+  billingDueDate: ['billing due date'],
+  number:         ['number'],
+  invoiceBillDate:['invoice/bill date','bill date','date'],
+  dueDate:        ['due date','duedate'],
+  totalSignedNew: ['total signed','total in currency signed'],
+  totalSignedOld: ['total in currency signed','total signed'],
+  status:         ['status'],
+  dateOld:        ['date'],
+  saleTags:       ['sale tags','saletags'],
 };
 
 const THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
